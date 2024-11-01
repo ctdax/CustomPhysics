@@ -100,7 +100,7 @@ G4VParticleChange* FullModelHadronicProcess::PostStepDoIt(const G4Track& aTrack,
     G4cout << "Kinetic energy is sick" << G4endl;
     G4cout << "Full R-hadron: " << (cloudKineticEnergy + gluinoMomentum.e() - gluinoMomentum.m()) / MeV << " MeV" << G4endl;
     G4cout << "Quark system: " << cloudKineticEnergy / MeV << " MeV" << G4endl;
-    aParticleChange.ProposeTrackStatus(fStopButAlive);  // AR_NEWCODE_IMPORT
+    aParticleChange.ProposeTrackStatus(fStopButAlive);
     return &aParticleChange;
   }
   cloudParticle->SetKineticEnergy(cloudKineticEnergy);
@@ -302,68 +302,23 @@ void FullModelHadronicProcess::CalculateMomenta(
   FullModelReactionDynamics theReactionDynamics;
   originalIncident3Momentum = originalIncident->Get4Momentum().vect();
 
-  //If the reaction is quasi-elastic, use the TwoBody method to calculate the momenta of the outgoing particles. Interstingly, modifiedOriginal is called here, however it is no different than the originalIncident at this point
+  //If the reaction is quasi-elastic, use the TwoBody method to calculate the momenta of the outgoing particles.
   if (quasiElastic) {
     theReactionDynamics.TwoBody(secondaryParticleVector, secondaryParticleVectorLen, modifiedOriginal, originalTarget, currentParticle, targetParticle, targetNucleus, targetHasChanged);
     return;
   }
 
-  //Checks to see if either the outgoing current or target particles are strange. If so, leadingStrangeParticle is set to the strange particle
+  //If the reaction is not quasi-elastic, update the outgoing particles momenta based on effects detailed in the functions below. Then call the TwoBody method afterwards
   G4ReactionProduct leadingStrangeParticle;
   G4bool leadFlag = MarkLeadingStrangeParticle(currentParticle, targetParticle, leadingStrangeParticle);
-
-  G4bool finishedGenXPt = false;
-  G4bool annihilation = false;
-  //If the original incident particle is an anti-particle, and the outgoing current and target particles have no mass, then annihilation has occured.
-  if (originalIncident->GetDefinition()->GetPDGEncoding() < 0 && currentParticle.GetMass() == 0.0 &&
-      targetParticle.GetMass() == 0.0) {
-    annihilation = true;
-    G4double kineticEnergyCorrection = 1.0;
-    G4double cloudKineticEnergy = originalIncident->GetKineticEnergy();
-    G4double originalCloudKineticEnergy = cloudKineticEnergy;
-
-    if (cloudKineticEnergy > 1.0 * GeV)
-      kineticEnergyCorrection = 1. / (cloudKineticEnergy / GeV);
-    const G4double atomicWeight = G4double(targetNucleus.GetN_asInt());
-    cloudKineticEnergy = 2 * originalTarget->GetDefinition()->GetPDGMass() + cloudKineticEnergy * (1. + kineticEnergyCorrection / atomicWeight);
-
-    G4double targetNucleusKineticEnergy = targetNucleus.Cinema(cloudKineticEnergy);
-    modifiedOriginal.SetKineticEnergy(originalCloudKineticEnergy += targetNucluesKineticEnergy);
-  }
-
-//////////STOPPED HERE////////
-
-  const G4double twsup[] = {1.0, 0.7, 0.5, 0.3, 0.2, 0.1};
-  G4double rand1 = G4UniformRand();
-  G4double rand2 = G4UniformRand();
-  if ((annihilation || (secondaryParticleVectorLen >= 6) || (modifiedOriginal.GetKineticEnergy() / GeV >= 1.0)) &&
-      (((originalIncident->GetDefinition() == G4KaonPlus::KaonPlus()) ||
-        (originalIncident->GetDefinition() == G4KaonMinus::KaonMinus()) ||
-        (originalIncident->GetDefinition() == G4KaonZeroLong::KaonZeroLong()) ||
-        (originalIncident->GetDefinition() == G4KaonZeroShort::KaonZeroShort())) &&
-       ((rand1 < 0.5) || (rand2 > twsup[secondaryParticleVectorLen]))))
-    finishedGenXPt = theReactionDynamics.GenerateXandPt(secondaryParticleVector,
-                                                        secondaryParticleVectorLen,
-                                                        modifiedOriginal,
-                                                        originalIncident,
-                                                        currentParticle,
-                                                        targetParticle,
-                                                        targetNucleus,
-                                                        incidentHasChanged,
-                                                        targetHasChanged,
-                                                        leadFlag,
-                                                        leadingStrangeParticle);
-  if (finishedGenXPt) {
-    Rotate(secondaryParticleVector, secondaryParticleVectorLen);
-    return;
-  }
-
   G4bool finishedTwoClu = false;
   if (modifiedOriginal.GetTotalMomentum() / MeV < 1.0) {
-    for (G4int i = 0; i < secondaryParticleVectorLen; i++)
+    for (G4int i = 0; i < secondaryParticleVectorLen; i++) {
       delete secondaryParticleVector[i];
+    }
     secondaryParticleVectorLen = 0;
-  } else {
+  } 
+  else {
     theReactionDynamics.SuppressChargedPions(secondaryParticleVector,
                                              secondaryParticleVectorLen,
                                              modifiedOriginal,
@@ -385,7 +340,8 @@ void FullModelHadronicProcess::CalculateMomenta(
                                                       targetHasChanged,
                                                       leadFlag,
                                                       leadingStrangeParticle);
-    } catch (G4HadReentrentException& aC) {
+    } 
+    catch (G4HadReentrentException& aC) {
       aC.Report(G4cout);
       throw G4HadReentrentException(__FILE__, __LINE__, "Failing to calculate momenta");
     }
@@ -395,19 +351,7 @@ void FullModelHadronicProcess::CalculateMomenta(
     return;
   }
 
-  //
-  // PNBlackTrackEnergy is the kinetic energy available for
-  //   proton/neutron black track particles [was enp(1) in fortran code]
-  // DTABlackTrackEnergy is the kinetic energy available for
-  //   deuteron/triton/alpha particles      [was enp(3) in fortran code]
-  // the atomic weight of the target nucleus is >= 1.5            AND
-  //   neither the incident nor the target particles have changed  AND
-  //     there is no kinetic energy available for either proton/neutron
-  //     or for deuteron/triton/alpha black track particles
-  // For diffraction scattering on heavy nuclei use elastic routines instead
-
-  theReactionDynamics.TwoBody(
-      secondaryParticleVector, secondaryParticleVectorLen, modifiedOriginal, originalTarget, currentParticle, targetParticle, targetNucleus, targetHasChanged);
+  theReactionDynamics.TwoBody(secondaryParticleVector, secondaryParticleVectorLen, modifiedOriginal, originalTarget, currentParticle, targetParticle, targetNucleus, targetHasChanged);
 }
 
 G4bool FullModelHadronicProcess::MarkLeadingStrangeParticle(const G4ReactionProduct& currentParticle,
@@ -419,12 +363,12 @@ G4bool FullModelHadronicProcess::MarkLeadingStrangeParticle(const G4ReactionProd
       (currentParticle.GetDefinition() != G4Proton::Proton()) &&
       (currentParticle.GetDefinition() != G4Neutron::Neutron())) {
     lead = true;
-    leadParticle = currentParticle;  //  set lead to the current particle
+    leadParticle = currentParticle;
   } else if ((targetParticle.GetMass() >= G4KaonPlus::KaonPlus()->GetPDGMass()) &&
              (targetParticle.GetDefinition() != G4Proton::Proton()) &&
              (targetParticle.GetDefinition() != G4Neutron::Neutron())) {
     lead = true;
-    leadParticle = targetParticle;  //   set lead to the target particle
+    leadParticle = targetParticle;
   }
   return lead;
 }
@@ -436,24 +380,4 @@ void FullModelHadronicProcess::Rotate(G4FastVector<G4ReactionProduct, MYGHADLIST
     momentum = momentum.rotate(2. * pi * G4UniformRand(), originalIncident3Momentum);
     secondaryParticleVector[i]->SetMomentum(momentum);
   }
-}
-
-const G4DynamicParticle* FullModelHadronicProcess::FindRhadron(G4ParticleChange* aParticleChange) {
-  G4int nsec = aParticleChange->GetNumberOfSecondaries();
-  if (nsec == 0)
-    return nullptr;
-  int i = 0;
-  G4bool found = false;
-  while (i != nsec && !found) {
-    //    G4cout<<"Checking "<<aParticleChange->GetSecondary(i)->GetDynamicParticle()->GetDefinition()->GetParticleName()<<G4endl;
-    //    if (aParticleChange->GetSecondary(i)->GetDynamicParticle()->GetDefinition()->GetParticleType()=="rhadron") found = true;
-    if (dynamic_cast<CustomParticle*>(aParticleChange->GetSecondary(i)->GetDynamicParticle()->GetDefinition()) !=
-        nullptr)
-      found = true;
-    i++;
-  }
-  i--;
-  if (found)
-    return aParticleChange->GetSecondary(i)->GetDynamicParticle();
-  return nullptr;
 }
