@@ -2070,6 +2070,7 @@ G4bool FullModelReactionDynamics::TwoCluster(
 
     // DEBUGGING --> DumpFrames::DumpFrame(vec, vecLen);
   }
+
   //if( centerofmassEnergy <= (4.0+G4UniformRand()) )
   //  MomentumCheck( modifiedOriginal, currentParticle, targetParticle, vec, vecLen );
   //
@@ -2102,7 +2103,6 @@ void FullModelReactionDynamics::TwoBody(G4FastVector<G4ReactionProduct, MYGHADLI
   // The b values are parametrizations from experimental data.
   // Not available values are taken from those of similar reactions.
   //
-  G4cout << "Inside of TwoBody" << G4endl;
   G4ParticleDefinition *aPiMinus = G4PionMinus::PionMinus();
   G4ParticleDefinition *aPiPlus = G4PionPlus::PionPlus();
   G4ParticleDefinition *aPiZero = G4PionZero::PionZero();
@@ -2136,7 +2136,6 @@ void FullModelReactionDynamics::TwoBody(G4FastVector<G4ReactionProduct, MYGHADLI
   if ((pCurrent < 0.1) || (cmEnergy < 0.01))  // 2-body scattering not possible
   {
     targetParticle.SetMass(0.0);  // flag that the target particle doesn't exist
-    G4cout << "TwoBody threw flag that target particle doesn't exist. Momenta not changed. pCurrent = " << pCurrent << ". cmEnergy = " << cmEnergy << G4endl;
   } else {
     // moved this if-block to a later stage, i.e. to the assignment of the scattering angle
     // @@@@@ double-check.
@@ -2250,10 +2249,8 @@ void FullModelReactionDynamics::TwoBody(G4FastVector<G4ReactionProduct, MYGHADLI
       G4cout<<"current E_kin: "<<currentParticle.GetKineticEnergy()<<G4endl;
       G4cout<<"current mass: "<<currentParticle.GetMass()<<G4endl;
       */
-    G4cout << "Changes were made to momenta in TwoBody, about to enter Defs1." << G4endl;
 
     Defs1(modifiedOriginal, currentParticle, targetParticle, vec, vecLen);
-    G4cout << "Exited Defs1." << G4endl;
 
     G4double pp, pp1, ekin;
     if (atomicWeight >= 1.5) {
@@ -2352,6 +2349,7 @@ void FullModelReactionDynamics::TwoBody(G4FastVector<G4ReactionProduct, MYGHADLI
   //
   //  calculate time delay for nuclear reactions
   //
+
   if ((atomicWeight >= 1.5) && (atomicWeight <= 230.0) && (ekOriginal <= 0.2))
     currentParticle.SetTOF(1.0 - 500.0 * std::exp(-ekOriginal / 0.04) * std::log(G4UniformRand()));
   else
@@ -2628,7 +2626,7 @@ void FullModelReactionDynamics::Defs1(const G4ReactionProduct &modifiedOriginal,
       ph = std::atan2(pjy, pjx);
     cosp = std::cos(ph);
     sinp = std::sin(ph);
-    G4cout << "Mission log: I am inside of Defs1 and shit has hit the fan. The current particle momentum prior to updating is " << currentParticle.GetMomentum() << G4endl;
+    G4cout << "Inside of Defs1. The quark cloud momentum prior to updating is " << currentParticle.GetMomentum() << G4endl;
     pix = currentParticle.GetMomentum().x() / MeV;
     piy = currentParticle.GetMomentum().y() / MeV;
     piz = currentParticle.GetMomentum().z() / MeV;
@@ -2636,7 +2634,7 @@ void FullModelReactionDynamics::Defs1(const G4ReactionProduct &modifiedOriginal,
                                 cost * sinp * pix * MeV + cosp * piy + sint * sinp * piz * MeV,
                                 -sint * pix * MeV + cost * piz * MeV);
     
-    G4cout << "Mission log: I am inside of Defs1 and shit has hit the fan. The current particle momentum after updating is " << currentParticle.GetMomentum() << G4endl;
+    G4cout << "Inside of Defs1. The quark cloud momentum after updating is " << currentParticle.GetMomentum() << G4endl;
 
     pix = targetParticle.GetMomentum().x() / MeV;
     piy = targetParticle.GetMomentum().y() / MeV;
