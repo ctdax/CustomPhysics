@@ -106,6 +106,7 @@ G4VParticleChange* FullModelHadronicProcess::PostStepDoIt(const G4Track& aTrack,
     G4cout << "Quark system: " << cloudKineticEnergy / MeV << " MeV" << G4endl;
     aParticleChange.ProposeTrackStatus(fStopButAlive);
     aParticleChange.ProposeTrackStatus(fStopButAlive);
+    aParticleChange.ProposeTrackStatus(fStopButAlive);
     return &aParticleChange;
   }
 
