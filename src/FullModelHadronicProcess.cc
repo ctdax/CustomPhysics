@@ -91,10 +91,10 @@ G4VParticleChange* FullModelHadronicProcess::PostStepDoIt(const G4Track& aTrack,
 
   // Update the cloud kinetic energy based on the target nucleus and evaporative effects
   G4double cloudKineticEnergy = cloudParticle->GetKineticEnergy(); 
-  G4double targetNucleusKineticEnergy = targetNucleus.Cinema(cloudKineticEnergy);
-  G4double evaporativeEnergy = targetNucleus.EvaporationEffects(cloudKineticEnergy);
-  G4double changeInCloudKineticEnergy = targetNucleusKineticEnergy - evaporativeEnergy; //This is used later when proposing a local energy deposit
-  cloudKineticEnergy += changeInCloudKineticEnergy;
+  G4double initialKineticEnergy = cloudKineticEnergy;
+  cloudKineticEnergy += targetNucleus.Cinema(cloudKineticEnergy);
+  cloudKineticEnergy -= targetNucleus.EvaporationEffects(cloudKineticEnergy);
+  G4double changeInCloudKineticEnergy = cloudKineticEnergy - initialKineticEnergy; //This is used later when proposing a local energy deposit
 
   G4ThreeVector cloud3MomentumDirection = cloudParticle->GetMomentum().unit();
   G4double cloud3MomentumMagnitudeAfterEvaporativeEffects = std::sqrt(cloudKineticEnergy * (cloudKineticEnergy + 2. * cloudParticle->GetDefinition()->GetPDGMass()));
