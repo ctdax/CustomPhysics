@@ -56,7 +56,7 @@ private:
 
   G4ProcessHelper *theHelper;
   G4bool toyModel;
-  G4ThreeVector incomingCloud3Momentum;
+  G4ThreeVector outgoingCloud3Momentum;
 };
 
 #endif
