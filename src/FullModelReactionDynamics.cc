@@ -2626,7 +2626,6 @@ void FullModelReactionDynamics::Defs1(const G4ReactionProduct &modifiedOriginal,
       ph = std::atan2(pjy, pjx);
     cosp = std::cos(ph);
     sinp = std::sin(ph);
-    G4cout << "Inside of Defs1. The quark cloud momentum prior to updating is " << currentParticle.GetMomentum() << G4endl;
     pix = currentParticle.GetMomentum().x() / MeV;
     piy = currentParticle.GetMomentum().y() / MeV;
     piz = currentParticle.GetMomentum().z() / MeV;
@@ -2634,8 +2633,6 @@ void FullModelReactionDynamics::Defs1(const G4ReactionProduct &modifiedOriginal,
                                 cost * sinp * pix * MeV + cosp * piy + sint * sinp * piz * MeV,
                                 -sint * pix * MeV + cost * piz * MeV);
     
-    G4cout << "Inside of Defs1. The quark cloud momentum after updating is " << currentParticle.GetMomentum() << G4endl;
-
     pix = targetParticle.GetMomentum().x() / MeV;
     piy = targetParticle.GetMomentum().y() / MeV;
     piz = targetParticle.GetMomentum().z() / MeV;
