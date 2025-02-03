@@ -9,7 +9,6 @@
 #include "SimG4Core/CustomPhysics/interface/CustomParticle.h"
 
 #include <cstdlib>
-#include <fstream>
 #include <sys/stat.h>
 
 #include <G4EventManager.hh>
@@ -66,11 +65,6 @@ G4double FullModelHadronicProcess::GetMeanFreePath(const G4Track& aTrack, G4doub
 }
 
 G4VParticleChange* FullModelHadronicProcess::PostStepDoIt(const G4Track& aTrack, const G4Step& aStep) {
-  // Create csv for debugging purposes
-  std::ofstream csv("RHadronEnergyDeposits.csv", std::ofstream::app);
-  if (isFileEmpty("RHadronEnergyDeposits.csv")){
-    csv << "Event,Evap Energy Change [MeV],Particle change energy change [MeV],CalculateMomenta Energy Change [MeV],Energy [MeV],r [mm],z [mm],Material,Atomic Number,Velocity (v/c),Charge,Track Length [mm],Number of Final State Particles\n";
-  }
 
   const G4TouchableHandle& thisTouchable(aTrack.GetTouchableHandle());
 
@@ -196,8 +190,6 @@ G4VParticleChange* FullModelHadronicProcess::PostStepDoIt(const G4Track& aTrack,
     outgoingTargetG4Reaction = G4ReactionProduct(outgoingTargetDefinition);
   }
 
-  G4cout << "Target energy before change = " << aTarget->GetPDGMass() << ". Target 4 momentum after change = " << outgoingTargetG4Dynamic->Get4Momentum() << G4endl;
-
   //Calculate the Lorentz boost of the cloud particle to the lab frame
   G4HadProjectile* incomingCloudG4HadProjectile = new G4HadProjectile(*cloudParticle);
   G4LorentzRotation cloudParticleToLabFrameRotation = incomingCloudG4HadProjectile->GetTrafoToLab();
@@ -212,10 +204,6 @@ G4VParticleChange* FullModelHadronicProcess::PostStepDoIt(const G4Track& aTrack,
   if (!incomingRhadronSurvives) {
     outgoingCloudG4Reaction.SetDefinitionAndUpdateE(outgoingCloudDefinition);
   }
-
-  G4cout << "Cloud 4 momentum before change = " << cloudParticle->Get4Momentum() << ". Cloud 4 momentum after change = " << outgoingCloudG4Reaction.GetMomentum() << outgoingCloudG4Reaction.GetTotalEnergy() << G4endl;
-  G4cout << "Cloud kinetic energy before change = " << cloudParticle->GetKineticEnergy() << ". Cloud kinetic energy after change = " << outgoingCloudG4Reaction.GetKineticEnergy() << G4endl;
-
   changeInQuarkEnergyDueToParticleChange -= outgoingCloudG4Reaction.GetTotalEnergy();
   changeInQuarkEnergyDueToParticleChange = -changeInQuarkEnergyDueToParticleChange;
 
@@ -282,8 +270,8 @@ G4VParticleChange* FullModelHadronicProcess::PostStepDoIt(const G4Track& aTrack,
   aParticleChange.SetNumberOfSecondaries(secondaryParticleVectorLen + reactionProductSize);
 
   //If the incident particle does not survive, update the outgoing track to be the new R-Hadron with the proper momentum, time, and position
+  G4DynamicParticle* dynamicOutgoingRhadron = new G4DynamicParticle;
   if (!incomingRhadronSurvives) {
-    G4DynamicParticle* dynamicOutgoingRhadron = new G4DynamicParticle;
     dynamicOutgoingRhadron->SetDefinition(outgoingRhadronDefinition);
     dynamicOutgoingRhadron->Set4Momentum(gluinoMomentum + outgoingCloudp4Prime);
 
@@ -295,10 +283,12 @@ G4VParticleChange* FullModelHadronicProcess::PostStepDoIt(const G4Track& aTrack,
     aParticleChange.ProposeTrackStatus(fStopAndKill);
   } 
 
-  //If the incident particle survives, simply update its momentum direction. Includes error handling for when the momentum is zero
+  //If the incident particle survives update its momentum direction. Includes error handling for when the momentum is zero
   else {
-    if (outgoingCloudp3Prime.mag() > DBL_MIN)
-      aParticleChange.ProposeMomentumDirection(outgoingCloudp3Prime.x() / outgoingCloudp3Prime.mag(), outgoingCloudp3Prime.y() / outgoingCloudp3Prime.mag(), outgoingCloudp3Prime.z() / outgoingCloudp3Prime.mag());
+    dynamicOutgoingRhadron->SetDefinition(incomingRhadron->GetDefinition());
+    dynamicOutgoingRhadron->Set4Momentum(gluinoMomentum + outgoingCloudp4Prime);
+    if (dynamicOutgoingRhadron->Get4Momentum().mag() > DBL_MIN)
+      aParticleChange.ProposeMomentumDirection(dynamicOutgoingRhadron->Get4Momentum().px() / dynamicOutgoingRhadron->Get4Momentum().mag(), dynamicOutgoingRhadron->Get4Momentum().py() / dynamicOutgoingRhadron->Get4Momentum().mag(), dynamicOutgoingRhadron->Get4Momentum().pz() / dynamicOutgoingRhadron->Get4Momentum().mag());
     else
       aParticleChange.ProposeMomentumDirection(1.0, 0.0, 0.0);
   }
@@ -330,13 +320,8 @@ G4VParticleChange* FullModelHadronicProcess::PostStepDoIt(const G4Track& aTrack,
 
   delete incomingCloudG4HadProjectile;
   delete outgoingTargetG4Dynamic;
-  aParticleChange.DumpInfo();
+  //aParticleChange.DumpInfo();
   ClearNumberOfInteractionLengthLeft();
-
-  const G4Event* currentEvent = G4EventManager::GetEventManager()->GetConstCurrentEvent();
-  G4double r = std::sqrt(aPosition.getX() * aPosition.getX() + aPosition.getY() * aPosition.getY());
-  csv << currentEvent->GetEventID() << "," << changeInCloudKineticEnergy << "," << changeInQuarkEnergyDueToParticleChange << "," << changeInCloudEnergyDueToCalculateMomenta << "," << aParticleChange.GetLocalEnergyDeposit() << "," << r << "," << aPosition.getZ() << "," << aTrack.GetMaterial()->GetName() << "," << atomicNumber << "," << initialTrackVelocity << "," << initialTrackCharge << "," << aParticleChange.GetTrueStepLength() << "," << reactionProduct.size() << "\n";
-  csv.close();
 
   return &aParticleChange;
 }
@@ -384,7 +369,6 @@ void FullModelHadronicProcess::CalculateMomenta(
                                              targetHasChanged);
 
     try {
-      G4cout << "Calling TwoCluster" << G4endl;
       finishedTwoClu = theReactionDynamics.TwoCluster(secondaryParticleVector,
                                                       secondaryParticleVectorLen,
                                                       modifiedoutgoingCloudG4Reaction,
