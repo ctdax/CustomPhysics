@@ -298,7 +298,7 @@ G4VParticleChange* FullModelHadronicProcess::PostStepDoIt(const G4Track& aTrack,
   {
     G4DynamicParticle* targetParticleG4DynamicAfterInteraction = new G4DynamicParticle;
     targetParticleG4DynamicAfterInteraction->SetDefinition(outgoingTargetG4Reaction.GetDefinition());
-    targetParticleG4DynamicAfterInteraction->SetMomentum(outgoingTargetG4Reaction.GetMomentum().rotate(2. * pi * G4UniformRand(), incomingCloud3Momentum.unit())); // rotate(const G4double angle, const ThreeVector &axis) const;
+    targetParticleG4DynamicAfterInteraction->SetMomentum(outgoingTargetG4Reaction.GetMomentum().rotate(2. * pi * G4UniformRand(), incomingCloud3Momentum)); // rotate(const G4double angle, const ThreeVector &axis) const;
     targetParticleG4DynamicAfterInteraction->SetMomentum((cloudParticleToLabFrameRotation * targetParticleG4DynamicAfterInteraction->Get4Momentum()).vect());
     G4Track* targetTrackAfterInteraction = new G4Track(targetParticleG4DynamicAfterInteraction, aTrack.GetGlobalTime(), aPosition);
     targetTrackAfterInteraction->SetTouchableHandle(thisTouchable);
