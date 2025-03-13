@@ -14,6 +14,8 @@
 #include <G4EventManager.hh>
 #include <G4Event.hh>
 
+#include <fstream> //DELETE LATER, USED FOR DEBUGGING
+
 using namespace CLHEP;
 
 
@@ -65,6 +67,15 @@ G4double FullModelHadronicProcess::GetMeanFreePath(const G4Track& aTrack, G4doub
 }
 
 G4VParticleChange* FullModelHadronicProcess::PostStepDoIt(const G4Track& aTrack, const G4Step& aStep) {
+
+  std::ofstream outFile("process.csv", std::ios::app); //DELETE LATER, USED FOR DEBUGGING
+  if (!outFile.is_open()) {
+    G4cerr << "FullModelHadronicProcess::PostStepDoIt  Could not open file for writing" << G4endl;
+    exit(EXIT_FAILURE);
+  }
+  if (isFileEmpty("process.csv")) {
+    outFile << "Event,Momentum,Process" << std::endl;
+  }
 
   const G4TouchableHandle& thisTouchable(aTrack.GetTouchableHandle());
 
@@ -128,13 +139,16 @@ G4VParticleChange* FullModelHadronicProcess::PostStepDoIt(const G4Track& aTrack,
   cloudParticle->SetKineticEnergy(cloudKineticEnergy);
   cloudParticle->SetMomentum(cloud3MomentumMagnitudeAfterEvaporativeEffects * cloud3MomentumDirection);
 
-  //Get the final state particles. reactionProduct is a vector of final state integer PDGIDs. Not to be confused with G4ReactionProduct
+  G4cout << "Change in cloud kinetic energy = " << changeInCloudKineticEnergy / GeV << " GeV" << G4endl;
+  G4cout << "Cloud 4 momentum after evaporative effects = " << cloudParticle->Get4Momentum() << G4endl;
+
+  //Get the final state particles. reactionProduct is a vector of integer PDGIDs. Not to be confused with G4ReactionProduct
   G4ParticleDefinition* aTarget;
   ReactionProduct reactionProduct = theHelper->GetFinalState(aTrack, aTarget);
   G4int reactionProductSize = reactionProduct.size();
 
   //Process outgoing particles from reactions
-  std::vector<G4ParticleDefinition*> finalStateParticleDefinitionsThatAreNotRhadron;
+  std::vector<G4ParticleDefinition*> outgoingParticleDefinitions;
   for (ReactionProduct::iterator it = reactionProduct.begin(); it != reactionProduct.end(); ++it) {
     G4ParticleDefinition* finalStateParticle = theParticleTable->FindParticle(*it);
     CustomParticle* finalStateCustomParticle = dynamic_cast<CustomParticle*>(finalStateParticle);
@@ -157,9 +171,26 @@ G4VParticleChange* FullModelHadronicProcess::PostStepDoIt(const G4Track& aTrack,
     if (finalStateParticle->GetPDGEncoding() == incomingRhadronPDG) {
       incomingRhadronSurvives = true;
     } else {
-      finalStateParticleDefinitionsThatAreNotRhadron.push_back(finalStateParticle);
+      outgoingParticleDefinitions.push_back(finalStateParticle);
     }
   }
+
+  //Write the event number, cloudParticle momentum, and reaction product to outFile DELETE LATER
+  std::ostringstream momentumStream;
+  momentumStream << cloudParticle->GetMomentum();
+  std::string momentumStr = momentumStream.str();
+  std::replace(momentumStr.begin(), momentumStr.end(), ',', ';');
+  outFile << G4EventManager::GetEventManager()->GetConstCurrentEvent()->GetEventID() << "," << momentumStr << ",";
+  outFile << incomingRhadron->GetDefinition()->GetParticleName() << " # ";
+  outFile << aTarget->GetParticleName() << " # ";
+  for (G4int i = 0; i != reactionProductSize; i++) {
+    G4ParticleDefinition *particle = theParticleTable->FindParticle(reactionProduct[i]);
+    if (i != reactionProductSize - 1) outFile << particle->GetParticleName() << " # ";
+    else outFile << particle->GetParticleName();
+  }
+  outFile << std::endl;
+  outFile.close();
+  //////// DELETE LATER
 
   //If no reaction occured, set the outgoingTargetDefinition to the original target definition
   if (outgoingTargetDefinition == nullptr)
@@ -206,12 +237,12 @@ G4VParticleChange* FullModelHadronicProcess::PostStepDoIt(const G4Track& aTrack,
   G4int secondaryParticleVectorLen = 0;
   secondaryParticleVector.Initialize(0);
 
-  //Fill the vector with the secondary particles. Here secondary particle is defined as all final state particles that are not the incoming or outgoing R-Hadron and target
+  //Fill the vector with the secondary particles
   for (G4int i = 0; i != reactionProductSize; i++) {
-    if (finalStateParticleDefinitionsThatAreNotRhadron[i] != aTarget && finalStateParticleDefinitionsThatAreNotRhadron[i] != incomingCloudG4HadProjectile->GetDefinition() &&
-        finalStateParticleDefinitionsThatAreNotRhadron[i] != outgoingRhadronDefinition && finalStateParticleDefinitionsThatAreNotRhadron[i] != outgoingTargetDefinition) {
+    if (outgoingParticleDefinitions[i] != aTarget && outgoingParticleDefinitions[i] != incomingCloudG4HadProjectile->GetDefinition() &&
+        outgoingParticleDefinitions[i] != outgoingRhadronDefinition && outgoingParticleDefinitions[i] != outgoingTargetDefinition) {
       G4ReactionProduct* secondaryReactionProduct = new G4ReactionProduct;
-      secondaryReactionProduct->SetDefinition(finalStateParticleDefinitionsThatAreNotRhadron[i]);
+      secondaryReactionProduct->SetDefinition(outgoingParticleDefinitions[i]);
       (G4UniformRand() < 0.5) ? secondaryReactionProduct->SetSide(-1) : secondaryReactionProduct->SetSide(1); //Here we randomly determine the hemisphere of the secondary particle
       secondaryParticleVector.SetElement(secondaryParticleVectorLen++, secondaryReactionProduct);
     }
@@ -249,6 +280,7 @@ G4VParticleChange* FullModelHadronicProcess::PostStepDoIt(const G4Track& aTrack,
   outgoingCloudp4Prime *= cloudParticleToLabFrameRotation;
   G4double changeInCloudEnergyDueToCalculateMomenta = outgoingCloudp4.e() - outgoingCloudp4Prime.e();
   G4double proposedEnergyDeposit = changeInCloudEnergyDueToCalculateMomenta - changeInCloudKineticEnergy;
+  
   if (proposedEnergyDeposit > 0) {
     aParticleChange.ProposeLocalEnergyDeposit(proposedEnergyDeposit);
   }
