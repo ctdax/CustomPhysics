@@ -8,25 +8,7 @@
 #include "SimG4Core/CustomPhysics/interface/CustomPDGParser.h"
 #include "SimG4Core/CustomPhysics/interface/CustomParticle.h"
 
-#include <cstdlib>
-#include <sys/stat.h>
-
-#include <G4EventManager.hh>
-#include <G4Event.hh>
-
-#include <fstream> //DELETE LATER, USED FOR DEBUGGING
-
 using namespace CLHEP;
-
-
-// Function to check if a file is empty
-bool isFileEmpty(const std::string& filename) {
-    struct stat fileStat;
-    if (stat(filename.c_str(), &fileStat) != 0) {
-        return true; // File does not exist
-    }
-    return fileStat.st_size == 0;
-}
 
 FullModelHadronicProcess::FullModelHadronicProcess(G4ProcessHelper* aHelper, const G4String& processName)
     : G4VDiscreteProcess(processName), theHelper(aHelper) {}
@@ -67,16 +49,6 @@ G4double FullModelHadronicProcess::GetMeanFreePath(const G4Track& aTrack, G4doub
 }
 
 G4VParticleChange* FullModelHadronicProcess::PostStepDoIt(const G4Track& aTrack, const G4Step& aStep) {
-
-  std::ofstream outFile("process.csv", std::ios::app); //DELETE LATER, USED FOR DEBUGGING
-  if (!outFile.is_open()) {
-    G4cerr << "FullModelHadronicProcess::PostStepDoIt  Could not open file for writing" << G4endl;
-    exit(EXIT_FAILURE);
-  }
-  if (isFileEmpty("process.csv")) {
-    outFile << "Event,Momentum,Process" << std::endl;
-  }
-
   const G4TouchableHandle& thisTouchable(aTrack.GetTouchableHandle());
 
   // Initialize parameters
@@ -108,39 +80,24 @@ G4VParticleChange* FullModelHadronicProcess::PostStepDoIt(const G4Track& aTrack,
   cloudParticle->Set4Momentum(cloudMomentum);
   G4LorentzVector gluinoMomentum(incomingRhadron->GetMomentum() * (1. - scale), incomingRhadron->GetTotalEnergy() - cloudParticle->GetTotalEnergy());
 
-  G4cout << "Incoming R-Hadron 4 momentum = " << incomingRhadron->Get4Momentum() << G4endl;
-  G4cout << "Incoming gluino 4 momentum = " << gluinoMomentum << G4endl;
-  G4cout << "Incoming cloud 4 momentum = " << cloudMomentum << G4endl;
-  G4cout << "Incoming R-Hadron type = " << incomingRhadron->GetDefinition()->GetParticleName() << G4endl;
-  G4cout << "Incoming cloud type = " << cloudParticle->GetDefinition()->GetParticleName() << G4endl;
-  G4cout << "Incoming cloud mass = " << cloudParticle->GetDefinition()->GetPDGMass() / GeV << " GeV" << G4endl;
-  G4cout << "Scale = " << scale << G4endl;
-
-  
   // Update the cloud kinetic energy based on the target nucleus and evaporative effects
   G4double cloudKineticEnergy = cloudParticle->GetKineticEnergy(); 
   G4double initialKineticEnergy = cloudKineticEnergy;
   cloudKineticEnergy += targetNucleus.Cinema(cloudKineticEnergy);
   cloudKineticEnergy -= targetNucleus.EvaporationEffects(cloudKineticEnergy);
-  G4double changeInCloudKineticEnergy = cloudKineticEnergy - initialKineticEnergy; //This is used later when proposing a local energy deposit
+  G4double changeInCloudKineticEnergy = initialKineticEnergy - cloudKineticEnergy; //This is used later when proposing a local energy deposit
 
   G4ThreeVector cloud3MomentumDirection = cloudParticle->GetMomentum().unit();
   G4double cloud3MomentumMagnitudeAfterEvaporativeEffects = std::sqrt(cloudKineticEnergy * (cloudKineticEnergy + 2. * cloudParticle->GetDefinition()->GetPDGMass()));
 
   // If the R-hadron kinetic energy is less than 0.1 MeV, or the cloud kinetic energy is less than or equal to 0, stop the track but keep it alive. This should be very rare.
   if (cloudKineticEnergy + gluinoMomentum.e() - gluinoMomentum.m() <= 0.1 * MeV || cloudKineticEnergy <= 0.) {
-    G4cout << "Kinetic energy is sick" << G4endl;
-    G4cout << "Full R-hadron: " << (cloudKineticEnergy + gluinoMomentum.e() - gluinoMomentum.m()) / MeV << " MeV" << G4endl;
-    G4cout << "Quark system: " << cloudKineticEnergy / MeV << " MeV" << G4endl;
     aParticleChange.ProposeTrackStatus(fStopButAlive);
     return &aParticleChange;
   }
 
   cloudParticle->SetKineticEnergy(cloudKineticEnergy);
   cloudParticle->SetMomentum(cloud3MomentumMagnitudeAfterEvaporativeEffects * cloud3MomentumDirection);
-
-  G4cout << "Change in cloud kinetic energy = " << changeInCloudKineticEnergy / GeV << " GeV" << G4endl;
-  G4cout << "Cloud 4 momentum after evaporative effects = " << cloudParticle->Get4Momentum() << G4endl;
 
   //Get the final state particles. reactionProduct is a vector of integer PDGIDs. Not to be confused with G4ReactionProduct
   G4ParticleDefinition* aTarget;
@@ -174,23 +131,6 @@ G4VParticleChange* FullModelHadronicProcess::PostStepDoIt(const G4Track& aTrack,
       outgoingParticleDefinitions.push_back(finalStateParticle);
     }
   }
-
-  //Write the event number, cloudParticle momentum, and reaction product to outFile DELETE LATER
-  std::ostringstream momentumStream;
-  momentumStream << cloudParticle->GetMomentum();
-  std::string momentumStr = momentumStream.str();
-  std::replace(momentumStr.begin(), momentumStr.end(), ',', ';');
-  outFile << G4EventManager::GetEventManager()->GetConstCurrentEvent()->GetEventID() << "," << momentumStr << ",";
-  outFile << incomingRhadron->GetDefinition()->GetParticleName() << " # ";
-  outFile << aTarget->GetParticleName() << " # ";
-  for (G4int i = 0; i != reactionProductSize; i++) {
-    G4ParticleDefinition *particle = theParticleTable->FindParticle(reactionProduct[i]);
-    if (i != reactionProductSize - 1) outFile << particle->GetParticleName() << " # ";
-    else outFile << particle->GetParticleName();
-  }
-  outFile << std::endl;
-  outFile.close();
-  //////// DELETE LATER
 
   //If no reaction occured, set the outgoingTargetDefinition to the original target definition
   if (outgoingTargetDefinition == nullptr)
@@ -248,15 +188,6 @@ G4VParticleChange* FullModelHadronicProcess::PostStepDoIt(const G4Track& aTrack,
     }
   }
 
-  G4cout << "Incoming target particle is " << aTarget->GetParticleName() << G4endl;
-  G4cout << "Target mass = " << aTarget->GetPDGMass() / GeV << " GeV" << G4endl;
-  G4cout << "Final R-Hadron is " << outgoingRhadronDefinition->GetParticleName() << G4endl;
-  G4cout << "Final target is " << outgoingTargetDefinition->GetParticleName() << G4endl;
-  // Print all secondaryParticleVector elements
-  for (int i = 0; i < secondaryParticleVectorLen; ++i) {
-    G4cout << "Secondary particle " << i << " is " << secondaryParticleVector[i]->GetDefinition()->GetParticleName() << G4endl;
-  }
-
   //Store the outgoing Cloud 4-momentum for energy deposit calculation that occurs after change in momemta has been calculated
   G4LorentzVector outgoingCloudp4(outgoingCloudG4Reaction.GetMomentum(), outgoingCloudG4Reaction.GetTotalEnergy());
   outgoingCloudp4 *= cloudParticleToLabFrameRotation;
@@ -279,21 +210,10 @@ G4VParticleChange* FullModelHadronicProcess::PostStepDoIt(const G4Track& aTrack,
   G4LorentzVector outgoingCloudp4Prime(outgoingCloudG4Reaction.GetMomentum(), outgoingCloudG4Reaction.GetTotalEnergy()); 
   outgoingCloudp4Prime *= cloudParticleToLabFrameRotation;
   G4double changeInCloudEnergyDueToCalculateMomenta = outgoingCloudp4.e() - outgoingCloudp4Prime.e();
-  G4double proposedEnergyDeposit = changeInCloudEnergyDueToCalculateMomenta - changeInCloudKineticEnergy;
+  G4double proposedEnergyDeposit = changeInCloudEnergyDueToCalculateMomenta + changeInCloudKineticEnergy;
   
   if (proposedEnergyDeposit > 0) {
     aParticleChange.ProposeLocalEnergyDeposit(proposedEnergyDeposit);
-  }
-
-  G4cout << "Proposed energy deposit = " << proposedEnergyDeposit / GeV << " GeV" << G4endl;
-
-  //Check if energy is conserved, output an error if it is not
-  if (proposedEnergyDeposit < 0) {
-    G4cerr << "An error occured in FullModelHadronicProcess.cc. Energy was not conserved during an interaction. The energy deposited was: " << proposedEnergyDeposit / GeV << " GeV (this should be positive)." << G4endl;
-  } 
-  //Check to make sure the energy loss is not too large, output an error if it is larger than 100GeV
-  if (proposedEnergyDeposit / GeV > 100) {
-    G4cerr << "The change in energy during an interaction was anomalously large (" << proposedEnergyDeposit / GeV << " GeV)" << G4endl;
   }
 
   //Update the number of secondaries to the correct value
@@ -337,7 +257,6 @@ G4VParticleChange* FullModelHadronicProcess::PostStepDoIt(const G4Track& aTrack,
   }
 
   // Update the momenta of the remaining secondary tracks
-  G4LorentzVector final4momentum;
   for (int i = 0; i < secondaryParticleVectorLen; ++i) {
     G4DynamicParticle* secondaryParticleAfterInteraction = new G4DynamicParticle();
     secondaryParticleAfterInteraction->SetDefinition(secondaryParticleVector[i]->GetDefinition());
@@ -347,27 +266,12 @@ G4VParticleChange* FullModelHadronicProcess::PostStepDoIt(const G4Track& aTrack,
     secondaryTrackAfterInteraction->SetTouchableHandle(thisTouchable);
     aParticleChange.AddSecondary(secondaryTrackAfterInteraction);
 
-    final4momentum += secondaryParticleAfterInteraction->Get4Momentum();
-    G4cout << "Outgoing secondary particle " << secondaryParticleAfterInteraction->GetDefinition()->GetParticleName() << " 4 momentum = " << secondaryParticleAfterInteraction->Get4Momentum() << G4endl;
-
     delete secondaryParticleVector[i];
   }
 
-  G4cout << "Outgoing R-Hadron 4 momentum = " << dynamicOutgoingRhadron->Get4Momentum() << G4endl;
-  G4cout << "Outgoing gluino 4 momentum = " << gluinoMomentum << G4endl;
-  G4cout << "Outgoing cloud 4 momentum = " << outgoingCloudp4Prime << G4endl;
-  G4cout << "Outgoing target 4 momentum = " << targetParticleG4DynamicAfterInteraction->Get4Momentum() << G4endl;
-  for (int i = 0; i < secondaryParticleVectorLen; ++i) {
-  }
-
-  G4LorentzVector initial4momentum = incomingRhadron->Get4Momentum() + G4LorentzVector(0,0,0, aTarget->GetPDGMass());
-  final4momentum += dynamicOutgoingRhadron->Get4Momentum() + targetParticleG4DynamicAfterInteraction->Get4Momentum();
-  G4cout << "Initial 4 momentum = " << initial4momentum  << ", magnitude = " << initial4momentum.m() << G4endl;
-  G4cout << "Final 4 momentum = " << final4momentum << ", magnitude = " << final4momentum.m() << G4endl;
-
   delete incomingCloudG4HadProjectile;
   delete outgoingTargetG4Dynamic;
-  aParticleChange.DumpInfo();
+  //aParticleChange.DumpInfo();
   ClearNumberOfInteractionLengthLeft();
 
   return &aParticleChange;
