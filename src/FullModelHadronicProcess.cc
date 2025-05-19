@@ -85,7 +85,6 @@ G4VParticleChange* FullModelHadronicProcess::PostStepDoIt(const G4Track& aTrack,
   G4double initialKineticEnergy = cloudKineticEnergy;
   cloudKineticEnergy += targetNucleus.Cinema(cloudKineticEnergy);
   cloudKineticEnergy -= targetNucleus.EvaporationEffects(cloudKineticEnergy);
-  G4double changeInCloudKineticEnergy = initialKineticEnergy - cloudKineticEnergy; //This is used later when proposing a local energy deposit
 
   G4ThreeVector cloud3MomentumDirection = cloudParticle->GetMomentum().unit();
   G4double cloud3MomentumMagnitudeAfterEvaporativeEffects = std::sqrt(cloudKineticEnergy * (cloudKineticEnergy + 2. * cloudParticle->GetDefinition()->GetPDGMass()));
@@ -209,9 +208,8 @@ G4VParticleChange* FullModelHadronicProcess::PostStepDoIt(const G4Track& aTrack,
   //Declare the Cloud 4-momentum after the interaction and propose an energy deposit of the difference between the incoming and outgoing quark cloud energies
   G4LorentzVector outgoingCloudp4Prime(outgoingCloudG4Reaction.GetMomentum(), outgoingCloudG4Reaction.GetTotalEnergy()); 
   outgoingCloudp4Prime *= cloudParticleToLabFrameRotation;
-  G4double changeInCloudEnergyDueToCalculateMomenta = outgoingCloudp4.e() - outgoingCloudp4Prime.e();
-  G4double proposedEnergyDeposit = changeInCloudEnergyDueToCalculateMomenta + changeInCloudKineticEnergy;
-  
+  G4double proposedEnergyDeposit = initialKineticEnergy - outgoingCloudG4Reaction.GetKineticEnergy();
+
   if (proposedEnergyDeposit > 0) {
     aParticleChange.ProposeLocalEnergyDeposit(proposedEnergyDeposit);
   }
