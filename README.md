@@ -1,5 +1,7 @@
 # CustomPhysics
 
+## Fixed G4LorentzVector usage, momentum updating, and energy deposit model in FullModelHadronicProcess.cc
+
 #### This PR is a result of continued work from the [previous FullModelHadronic.cc PR.](https://github.com/cms-sw/cmssw/pull/46728) In an attempt to check if other bugs existed, we first had to understand how the file simulated hadronic interactions. This led to many quality changes such as the removal of unneeded blocks of code and the changing of variable names. The final result was the discovery of three minor bugs, whose impact is thankfully no where near the magnitude of the bug from the aforementioned previous PR.
 
 - **Bug fix:** Corrected the usage of G4LorentzVector from (p, m) to (p, E)
